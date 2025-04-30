@@ -7,10 +7,26 @@
     body { font-family: sans-serif; text-align: center; padding: 20px; }
     video, canvas { display: none; }
     #resultat { font-size: 1.2em; margin-top: 20px; white-space: pre-wrap; text-align: left; }
+    #ledSimulee {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: darkred;
+      margin: 30px auto;
+      display: none;
+      box-shadow: 0 0 10px #000;
+    }
+    label { display: block; margin: 10px; }
   </style>
 </head>
 <body>
   <h1>Diagnostic LED Rouge</h1>
+
+  <label>
+    <input type="checkbox" id="modeSimulateur"> Mode Simulateur
+  </label>
+
+  <div id="ledSimulee"></div>
   <video id="video" autoplay playsinline></video>
   <canvas id="canvas" width="320" height="240"></canvas>
   <div id="resultat">Analyse en attente...</div>
@@ -20,7 +36,10 @@
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
     const resultat = document.getElementById("resultat");
+    const ledSimulee = document.getElementById("ledSimulee");
+    const switchMode = document.getElementById("modeSimulateur");
 
+    let modeSimu = false;
     let clignotements = [];
     let sequence = [];
     let lastOn = false;
@@ -95,40 +114,62 @@
       "0000": "Fin du diagnostic"
     };
 
-    async function start() {
+    switchMode.addEventListener("change", () => {
+      modeSimu = switchMode.checked;
+      ledSimulee.style.display = modeSimu ? "block" : "none";
+      video.style.display = modeSimu ? "none" : "block";
+      if (!modeSimu) startCamera();
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (modeSimu && e.code === "Space") {
+        ledSimulee.style.background = "red";
+        enregistrerClignotement();
+      }
+    });
+
+    document.addEventListener("keyup", (e) => {
+      if (modeSimu && e.code === "Space") {
+        ledSimulee.style.background = "darkred";
+      }
+    });
+
+    async function startCamera() {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
       video.srcObject = stream;
-      processFrame();
+      analyserCamera();
     }
 
-    function processFrame() {
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-      let redSum = 0;
+    function analyserCamera() {
+      if (!modeSimu) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        let redSum = 0;
 
-      for (let i = 0; i < data.length; i += 4) redSum += data[i];
-      const avgRed = redSum / (data.length / 4);
-      const ledOn = avgRed > ledThreshold;
-      const now = Date.now();
+        for (let i = 0; i < data.length; i += 4) redSum += data[i];
+        const avgRed = redSum / (data.length / 4);
+        const ledOn = avgRed > ledThreshold;
+        const now = Date.now();
 
-      if (ledOn !== lastOn && (!timerStart || now - timerStart > minFlashDelay)) {
-        timerStart = now;
-        if (!ledOn) {
-          clignotements.push(now);
-          analyserClignotements();
+        if (ledOn !== lastOn && (!timerStart || now - timerStart > minFlashDelay)) {
+          timerStart = now;
+          if (!ledOn) enregistrerClignotement();
+          lastOn = ledOn;
         }
-        lastOn = ledOn;
+        requestAnimationFrame(analyserCamera);
       }
+    }
 
-      requestAnimationFrame(processFrame);
+    function enregistrerClignotement() {
+      const now = Date.now();
+      clignotements.push(now);
+      analyserClignotements();
     }
 
     function analyserClignotements() {
       if (clignotements.length < 4) return;
-
       const intervals = clignotements.slice(-5).map((t, i, arr) => i > 0 ? t - arr[i - 1] : 0).slice(1);
       const pauseLongue = intervals.find(d => d > 1500);
-
       if (pauseLongue) {
         const sequenceCode = clignotements.slice(0, -1).length;
         clignotements = [];
@@ -142,7 +183,7 @@
       }
     }
 
-    start();
+    startCamera();
   </script>
 </body>
 </html>

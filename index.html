@@ -280,7 +280,7 @@
     }
 
     async function rejouerClignotements(seq) {
-      await flashCouleur("yellow", 2000);
+    //  await flashCouleur("yellow", 2000);
       for (const n of seq) {
         for (let i = 0; i < n; i++) {
           await flashCouleur("red", 200);
@@ -288,7 +288,7 @@
         }
         await new Promise(r => setTimeout(r, 1800));
       }
-      await flashCouleur("yellow", 2000);
+    //  await flashCouleur("yellow", 2000);
     }
 
     startCamera();

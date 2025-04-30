@@ -68,6 +68,11 @@
       margin-top: 10px;
       color: #2196f3;
     }
+    #startCaptureBtn {
+      display: none;
+      margin-top: 10px;
+      font-size: 1em;
+    }
   </style>
 </head>
 <body>
@@ -78,6 +83,8 @@
     <label><input type="radio" name="mode" value="manuel"> Simulation manuelle</label>
     <label><input type="radio" name="mode" value="auto"> Lecture automatique</label>
   </div>
+
+  <button id="startCaptureBtn">Lire le code ?</button>
 
   <div id="ledSimulee" title="Clique ou appuie sur espace pour simuler la LED"></div>
 
@@ -101,78 +108,12 @@
       <li>Choisis un mode avec les boutons radio (Caméra / Manuel / Auto).</li>
       <li>En <b>manuel</b> : appuie sur <kbd>espace</kbd> ou clique sur la LED.</li>
       <li>En <b>auto</b> : choisis un code, clique sur "Rejouer ce code".</li>
-      <li>Une LED <b>jaune</b> est remplacée par "Départ" / "Fin" à l’écran.</li>
+      <li>En <b>caméra</b> : clique sur "Lire le code ?" pour démarrer l’analyse visuelle.</li>
       <li>Utilise "Reset" pour tout effacer.</li>
     </ol>
   </div>
 
   <script>
-    const codes = {
-      "1111":"Calculateur défectueux ou sécurité",
-      "1213":"Capteur mouvement/vitesse",
-      "1231":"Capteur mouvement/vitesse",
-      "1232":"Ralenti à vide",
-      "2111":"Tachymètre",
-      "2112":"Capteur AAC",
-      "2113":"Capteur Hall",
-      "2114":"Réglage allumage",
-      "2121":"Interrupteur marche à vide",
-      "2122":"Capteur Hall",
-      "2123":"Vollastschalter",
-      "2124":"Position papillon",
-      "2132":"Injection/allumage ou ECU",
-      "2141":"Cliquetis 1 hors tolérance",
-      "2142":"Pas signal cliquetis 1",
-      "2143":"Cliquetis 2 hors tolérance",
-      "2144":"Pas signal cliquetis 2",
-      "2212":"Potentiomètre papillon",
-      "2214":"Vitesse max dépassée",
-      "2221":"Signal boîtier papillon",
-      "2222":"Pression tubulure",
-      "2223":"Capteur pression",
-      "2224":"Suralim trop élevée",
-      "2231":"Régime ralenti",
-      "2232":"Masse d'air",
-      "2233":"Tension masse d'air",
-      "2234":"Tension alim",
-      "2242":"Potentiomètre CO",
-      "2312":"Temp. liquide refroid.",
-      "2314":"Transmission données",
-      "2322":"Temp. air",
-      "2323":"Volume air",
-      "2324":"Volume air",
-      "2331":"Sonde lambda hors tol.",
-      "2332":"Sonde lambda",
-      "2341":"Mélange air/essence",
-      "2342":"Sonde lambda",
-      "2343":"Gaz trop riche",
-      "2344":"Gaz trop pauvre",
-      "2411":"Temp. gaz échappement",
-      "2412":"Temp. air",
-      "2413":"Contrôle mélange",
-      "3424":"Erreur lampe contrôle",
-      "4311":"Relais pompe injection",
-      "4312":"Soupape EGR",
-      "4313":"Électrovanne injection",
-      "4331":"Relais extraction",
-      "4332":"Actionneurs suspendus",
-      "4343":"Relais extraction",
-      "4411":"Injecteur 1",
-      "4412":"Injecteur 2",
-      "4414":"Injecteur 4",
-      "4421":"Injecteur 5",
-      "4422":"Injecteur 6",
-      "4423":"Injecteur 7",
-      "4424":"Injecteur 8",
-      "4431":"Vitesse ralenti",
-      "4432":"Régime ralenti",
-      "4433":"Relais pompe carburant",
-      "4442":"Soupape régulation ISV",
-      "4443":"Relais extraction",
-      "4444":"Aucune erreur",
-      "0000":"Fin diagnostic"
-    };
-
     const video = document.getElementById("video");
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
@@ -188,13 +129,27 @@
     const resetBtn = document.getElementById("reset");
     const controleSimu = document.getElementById("controleSimu");
     const modeRadios = document.querySelectorAll("input[name='mode']");
+    const startCaptureBtn = document.getElementById("startCaptureBtn");
 
     let mode = "video";
     let clignotements = [];
     let sequence = [];
     let lastOn = false;
     let timerStart = null;
+    let videoRunning = false;
+    let captureActive = false;
     const minFlashDelay = 150;
+
+    const codes = {
+      "1111":"Calculateur défectueux ou sécurité",
+      "1232":"Ralenti à vide",
+      "2111":"Tachymètre",
+      "2112":"Capteur AAC",
+      "2143":"Cliquetis 2 hors tolérance",
+      "2343":"Gaz trop riche",
+      "4444":"Aucune erreur",
+      "0000":"Fin diagnostic"
+    };
 
     for (const k in codes) {
       const opt = document.createElement("option");
@@ -208,61 +163,32 @@
       ledSimulee.style.display = (mode !== "video") ? "block" : "none";
       controleSimu.style.display = (mode === "auto") ? "block" : "none";
       video.style.display = (mode === "video") ? "block" : "none";
+      startCaptureBtn.style.display = (mode === "video") ? "inline-block" : "none";
       if (mode === "video") startCamera();
     }));
 
-    document.addEventListener("keydown", e => {
-      if (mode === "manuel" && e.code === "Space") {
-        ledSimulee.style.background = "red";
-        enregistrerClignotement();
-      }
-    });
-    document.addEventListener("keyup", e => {
-      if (mode === "manuel" && e.code === "Space") ledSimulee.style.background = "darkred";
-    });
-    ledSimulee.addEventListener("mousedown", () => {
-      if (mode === "manuel") {
-        ledSimulee.style.background = "red";
-        enregistrerClignotement();
-      }
-    });
-    ledSimulee.addEventListener("mouseup", () => {
-      if (mode === "manuel") ledSimulee.style.background = "darkred";
-    });
-
-    resetBtn.addEventListener("click", () => {
-      resultat.innerText = "Analyse en attente...";
-      clignotements = [];
-      sequence = [];
-    });
-
-    playCode.addEventListener("click", () => {
-      const val = codeSelect.value;
-      if (!val) return;
-      const clignots = val.split("").map(d => parseInt(d));
-      rejouerClignotements(clignots);
+    startCaptureBtn.addEventListener("click", () => {
+      if (!videoRunning) return;
+      captureActive = true;
+      analyserCamera();
+      startCaptureBtn.disabled = true;
     });
 
     async function startCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
         video.srcObject = stream;
-        analyserCamera();
+        videoRunning = true;
       } catch (e) {
         alert("Erreur accès caméra");
       }
     }
 
     function analyserCamera() {
-      if (mode !== "video") return;
+      if (!captureActive) return;
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const w = canvas.width, h = canvas.height;
-      const zoneW = w / 3, zoneH = h / 3;
-      const zoneX = w / 3, zoneY = h / 3;
-      const imageData = ctx.getImageData(zoneX, zoneY, zoneW, zoneH);
-      const data = imageData.data;
+      const data = ctx.getImageData(canvas.width/3, canvas.height/3, canvas.width/3, canvas.height/3).data;
       let redSum = 0, count = 0;
-
       for (let i = 0; i < data.length; i += 4) {
         const r = data[i], g = data[i+1], b = data[i+2];
         if (r > 100 && r > g + 30 && r > b + 30) {
@@ -270,11 +196,9 @@
           count++;
         }
       }
-
       const avgRed = count > 0 ? redSum / count : 0;
       const ledOn = avgRed > 150;
       ledIndicator.style.backgroundColor = ledOn ? "limegreen" : "gray";
-
       const now = Date.now();
       if (ledOn !== lastOn && (!timerStart || now - timerStart > minFlashDelay)) {
         timerStart = now;
@@ -306,6 +230,38 @@
         }
       }
     }
+
+    document.addEventListener("keydown", e => {
+      if (mode === "manuel" && e.code === "Space") {
+        ledSimulee.style.background = "red";
+        enregistrerClignotement();
+      }
+    });
+    document.addEventListener("keyup", e => {
+      if (mode === "manuel" && e.code === "Space") ledSimulee.style.background = "darkred";
+    });
+    ledSimulee.addEventListener("mousedown", () => {
+      if (mode === "manuel") {
+        ledSimulee.style.background = "red";
+        enregistrerClignotement();
+      }
+    });
+    ledSimulee.addEventListener("mouseup", () => {
+      if (mode === "manuel") ledSimulee.style.background = "darkred";
+    });
+
+    playCode.addEventListener("click", () => {
+      const val = codeSelect.value;
+      if (!val) return;
+      const clignots = val.split("").map(d => parseInt(d));
+      rejouerClignotements(clignots);
+    });
+
+    resetBtn.addEventListener("click", () => {
+      resultat.innerText = "Analyse en attente...";
+      clignotements = [];
+      sequence = [];
+    });
 
     async function flashCouleur(couleur, duration) {
       ledSimulee.style.background = couleur;

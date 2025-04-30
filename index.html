@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Diagnostic LED</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; padding: 20px; }
+    video, canvas { display: none; }
+    #resultat { font-size: 1.2em; margin-top: 20px; white-space: pre-wrap; text-align: left; }
+  </style>
+</head>
+<body>
+  <h1>Diagnostic LED Rouge</h1>
+  <video id="video" autoplay playsinline></video>
+  <canvas id="canvas" width="320" height="240"></canvas>
+  <div id="resultat">Analyse en attente...</div>
+
+  <script>
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const resultat = document.getElementById("resultat");
+
+    let clignotements = [];
+    let sequence = [];
+    let lastOn = false;
+    let timerStart = null;
+    const ledThreshold = 150;
+    const minFlashDelay = 150;
+
+    const codes = {
+      "1111": "Calculateur defectueux ou en mode de sécurité",
+      "1213": "Capteur de mouvement / vitesse",
+      "1231": "Capteur de mouvement / vitesse",
+      "1232": "Capteur de ralenti à vide",
+      "2111": "Tachymetre / compte tours",
+      "2112": "Capteur de position de l'AAC",
+      "2113": "Capteur Hall",
+      "2114": "Erreur de rêglage d'allumage",
+      "2121": "Interrupteur de marche a vide",
+      "2122": "Capteur Hall",
+      "2123": "Vollastschalter",
+      "2124": "Capteur de position du papillon",
+      "2132": "Informations injection/allumage ou ECU defectueux",
+      "2141": "Capteur de cliquetis 1 hors tolérance",
+      "2142": "Pas de signal capteur cliquetis 1",
+      "2143": "Capteur de cliquetis 2 hors tolérance",
+      "2144": "Pas de signal capteur cliquetis 2",
+      "2212": "Potentiomètre papillon",
+      "2214": "Vitesse maximale dépassée",
+      "2221": "Mauvais signal boitier papillon",
+      "2222": "Capteur de pression tubulure",
+      "2223": "Capteur de pression",
+      "2224": "Suralimentation trop élevée",
+      "2231": "Contrôle du régime de ralenti",
+      "2232": "Mesure de la masse d'air",
+      "2233": "Tension réf. masse d'air",
+      "2234": "Tension d'alim.",
+      "2242": "Potentiomètre de CO",
+      "2312": "Sonde température liquide refroidissement",
+      "2314": "Transmission des données",
+      "2322": "Capteur température d'air",
+      "2323": "Capteur de volume d'air",
+      "2324": "Capteur de volume d'air",
+      "2331": "Régulation sonde lambda hors tolérance",
+      "2332": "Sonde lambda",
+      "2341": "Mélange air-essence hors tolérance",
+      "2342": "Sonde lambda",
+      "2343": "Gaz trop riche",
+      "2344": "Gaz trop pauvre",
+      "2411": "Capteur température gaz échappement",
+      "2412": "Capteur température air",
+      "2413": "Contrôle du mélange",
+      "3424": "Erreur de la lampe de contrôle",
+      "4311": "Relais pompe injection",
+      "4312": "Soupape EGR",
+      "4313": "Electrovanne injection",
+      "4331": "Relais d'extraction",
+      "4332": "Suspension actionneurs",
+      "4343": "Relais extraction",
+      "4411": "Injecteur 1",
+      "4412": "Injecteur 2",
+      "4423": "Injecteur 3",
+      "4414": "Injecteur 4",
+      "4421": "Injecteur 5",
+      "4422": "Injecteur 6",
+      "4423": "Injecteur 7",
+      "4424": "Injecteur 8",
+      "4431": "Contrôle vitesse ralenti",
+      "4432": "Régime de ralenti",
+      "4433": "Relais pompe à carburant",
+      "4442": "Soupape régulation pression (ISV)",
+      "4443": "Relais extraction",
+      "4444": "Aucune erreur",
+      "0000": "Fin du diagnostic"
+    };
+
+    async function start() {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      video.srcObject = stream;
+      processFrame();
+    }
+
+    function processFrame() {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      let redSum = 0;
+
+      for (let i = 0; i < data.length; i += 4) redSum += data[i];
+      const avgRed = redSum / (data.length / 4);
+      const ledOn = avgRed > ledThreshold;
+      const now = Date.now();
+
+      if (ledOn !== lastOn && (!timerStart || now - timerStart > minFlashDelay)) {
+        timerStart = now;
+        if (!ledOn) {
+          clignotements.push(now);
+          analyserClignotements();
+        }
+        lastOn = ledOn;
+      }
+
+      requestAnimationFrame(processFrame);
+    }
+
+    function analyserClignotements() {
+      if (clignotements.length < 4) return;
+
+      const intervals = clignotements.slice(-5).map((t, i, arr) => i > 0 ? t - arr[i - 1] : 0).slice(1);
+      const pauseLongue = intervals.find(d => d > 1500);
+
+      if (pauseLongue) {
+        const sequenceCode = clignotements.slice(0, -1).length;
+        clignotements = [];
+        sequence.push(sequenceCode);
+        if (sequence.length === 4) {
+          const code = sequence.join('');
+          const desc = codes[code] || "Code inconnu";
+          resultat.innerText += `\n→ Code : ${code} — ${desc}`;
+          sequence = [];
+        }
+      }
+    }
+
+    start();
+  </script>
+</body>
+</html>

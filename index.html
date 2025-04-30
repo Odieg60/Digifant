@@ -1,6 +1,5 @@
-# Recrée le fichier avec tout le HTML + le JavaScript complet intégré
-
-full_html = """
+# Génération du contenu HTML complet avec toutes les fonctionnalités intégrées
+html_final_code = """
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -18,6 +17,7 @@ full_html = """
       box-shadow: 0 0 10px #000;
       display: none;
       cursor: pointer;
+      transition: background 0.2s;
     }
     #resultat {
       font-size: 1em;
@@ -45,14 +45,18 @@ full_html = """
       margin: 5px;
       padding: 5px 10px;
     }
+    .mode-select { margin: 20px; }
+    label { margin: 0 10px; }
   </style>
 </head>
 <body>
   <h1>Simulateur Diagnostic LED</h1>
 
-  <label>
-    <input type="checkbox" id="modeSimulateur"> Mode Simulateur
-  </label><br>
+  <div class="mode-select">
+    <label><input type="radio" name="mode" value="video" checked> Caméra</label>
+    <label><input type="radio" name="mode" value="manuel"> Simulation manuelle</label>
+    <label><input type="radio" name="mode" value="auto"> Lecture automatique</label>
+  </div>
 
   <div id="ledSimulee" title="Clique ou appuie sur espace pour simuler la LED"></div>
 
@@ -67,24 +71,13 @@ full_html = """
   <div id="resultat">Analyse en attente...</div>
 
   <div id="guide">
-    <h3>📘 Marche à suivre pour tester les codes :</h3>
+    <h3>📘 Marche à suivre :</h3>
     <ol>
-      <li><strong>Ouvre ce fichier dans ton navigateur</strong> (Chrome ou Firefox, PC ou smartphone).</li>
-      <li><strong>Coche "Mode Simulateur"</strong> pour activer la LED virtuelle.</li>
-      <li><strong>Tester manuellement un code :</strong><br>
-        - Appuie sur <kbd>ESPACE</kbd> ou clique sur la LED<br>
-        - 1 appui = 1 flash<br>
-        - Fais une pause de 2 secondes après chaque série de flashs (chiffre)<br>
-        - Répète 4 fois pour composer le code<br>
-        <em>Exemple : 2111 = 2 flashs + pause + 1 + pause + 1 + pause + 1 + pause</em>
-      </li>
-      <li><strong>Tester automatiquement un code :</strong><br>
-        - Choisis un code dans la liste<br>
-        - Clique sur "Rejouer ce code"<br>
-        - La LED clignote toute seule<br>
-        - Le code s’affiche automatiquement avec sa signification
-      </li>
-      <li><strong>Cliquer sur "Reset"</strong> pour effacer les résultats affichés.</li>
+      <li>Choisis un mode avec les boutons radio (Caméra / Manuel / Auto).</li>
+      <li>En <b>manuel</b> : appuie sur <kbd>espace</kbd> ou clique sur la LED.</li>
+      <li>En <b>auto</b> : choisis un code, clique sur "Rejouer ce code".</li>
+      <li>Une LED <b>jaune</b> s’allume 2 sec au début et fin pour encadrer la séquence.</li>
+      <li>Utilise "Reset" pour tout effacer.</li>
     </ol>
   </div>
 
@@ -94,13 +87,13 @@ full_html = """
     const ctx = canvas.getContext("2d");
     const resultat = document.getElementById("resultat");
     const ledSimulee = document.getElementById("ledSimulee");
-    const switchMode = document.getElementById("modeSimulateur");
     const codeSelect = document.getElementById("codeSelect");
     const playCode = document.getElementById("playCode");
     const resetBtn = document.getElementById("reset");
     const controleSimu = document.getElementById("controleSimu");
+    const modeRadios = document.querySelectorAll("input[name='mode']");
 
-    let modeSimu = false;
+    let mode = "video";
     let clignotements = [];
     let sequence = [];
     let lastOn = false;
@@ -109,70 +102,70 @@ full_html = """
     const minFlashDelay = 150;
 
     const codes = {
-      "1111": "Calculateur defectueux ou en mode de sécurité",
-      "1213": "Capteur de mouvement / vitesse",
-      "1231": "Capteur de mouvement / vitesse",
-      "1232": "Capteur de ralenti à vide",
-      "2111": "Tachymetre / compte tours",
-      "2112": "Capteur de position de l'AAC",
-      "2113": "Capteur Hall",
-      "2114": "Erreur de rêglage d'allumage",
-      "2121": "Interrupteur de marche a vide",
-      "2122": "Capteur Hall",
-      "2123": "Vollastschalter",
-      "2124": "Capteur de position du papillon",
-      "2132": "Informations injection/allumage ou ECU defectueux",
-      "2141": "Capteur de cliquetis 1 hors tolérance",
-      "2142": "Pas de signal capteur cliquetis 1",
-      "2143": "Capteur de cliquetis 2 hors tolérance",
-      "2144": "Pas de signal capteur cliquetis 2",
-      "2212": "Potentiomètre papillon",
-      "2214": "Vitesse maximale dépassée",
-      "2221": "Mauvais signal boitier papillon",
-      "2222": "Capteur de pression tubulure",
-      "2223": "Capteur de pression",
-      "2224": "Suralimentation trop élevée",
-      "2231": "Contrôle du régime de ralenti",
-      "2232": "Mesure de la masse d'air",
-      "2233": "Tension réf. masse d'air",
-      "2234": "Tension d'alim.",
-      "2242": "Potentiomètre de CO",
-      "2312": "Sonde température liquide refroidissement",
-      "2314": "Transmission des données",
-      "2322": "Capteur température d'air",
-      "2323": "Capteur de volume d'air",
-      "2324": "Capteur de volume d'air",
-      "2331": "Régulation sonde lambda hors tolérance",
-      "2332": "Sonde lambda",
-      "2341": "Mélange air-essence hors tolérance",
-      "2342": "Sonde lambda",
-      "2343": "Gaz trop riche",
-      "2344": "Gaz trop pauvre",
-      "2411": "Capteur température gaz échappement",
-      "2412": "Capteur température air",
-      "2413": "Contrôle du mélange",
-      "3424": "Erreur de la lampe de contrôle",
-      "4311": "Relais pompe injection",
-      "4312": "Soupape EGR",
-      "4313": "Electrovanne injection",
-      "4331": "Relais d'extraction",
-      "4332": "Suspension actionneurs",
-      "4343": "Relais extraction",
-      "4411": "Injecteur 1",
-      "4412": "Injecteur 2",
-      "4423": "Injecteur 3",
-      "4414": "Injecteur 4",
-      "4421": "Injecteur 5",
-      "4422": "Injecteur 6",
-      "4423": "Injecteur 7",
-      "4424": "Injecteur 8",
-      "4431": "Contrôle vitesse ralenti",
-      "4432": "Régime de ralenti",
-      "4433": "Relais pompe à carburant",
-      "4442": "Soupape régulation pression (ISV)",
-      "4443": "Relais extraction",
-      "4444": "Aucune erreur",
-      "0000": "Fin du diagnostic"
+      "1111":"Calculateur défectueux ou sécurité",
+      "1213":"Capteur mouvement/vitesse",
+      "1231":"Capteur mouvement/vitesse",
+      "1232":"Ralenti à vide",
+      "2111":"Tachymètre",
+      "2112":"Capteur AAC",
+      "2113":"Capteur Hall",
+      "2114":"Réglage allumage",
+      "2121":"Interrupteur marche à vide",
+      "2122":"Capteur Hall",
+      "2123":"Vollastschalter",
+      "2124":"Position papillon",
+      "2132":"Injection/allumage ou ECU",
+      "2141":"Cliquetis 1 hors tolérance",
+      "2142":"Pas signal cliquetis 1",
+      "2143":"Cliquetis 2 hors tolérance",
+      "2144":"Pas signal cliquetis 2",
+      "2212":"Potentiomètre papillon",
+      "2214":"Vitesse max dépassée",
+      "2221":"Signal boîtier papillon",
+      "2222":"Pression tubulure",
+      "2223":"Capteur pression",
+      "2224":"Suralim trop élevée",
+      "2231":"Régime ralenti",
+      "2232":"Masse d'air",
+      "2233":"Tension masse d'air",
+      "2234":"Tension alim",
+      "2242":"Potentiomètre CO",
+      "2312":"Temp. liquide refroid.",
+      "2314":"Transmission données",
+      "2322":"Temp. air",
+      "2323":"Volume air",
+      "2324":"Volume air",
+      "2331":"Sonde lambda hors tol.",
+      "2332":"Sonde lambda",
+      "2341":"Mélange air/essence",
+      "2342":"Sonde lambda",
+      "2343":"Gaz trop riche",
+      "2344":"Gaz trop pauvre",
+      "2411":"Temp. gaz échappement",
+      "2412":"Temp. air",
+      "2413":"Contrôle mélange",
+      "3424":"Erreur lampe contrôle",
+      "4311":"Relais pompe injection",
+      "4312":"Soupape EGR",
+      "4313":"Électrovanne injection",
+      "4331":"Relais extraction",
+      "4332":"Actionneurs suspendus",
+      "4343":"Relais extraction",
+      "4411":"Injecteur 1",
+      "4412":"Injecteur 2",
+      "4423":"Injecteur 3",
+      "4414":"Injecteur 4",
+      "4421":"Injecteur 5",
+      "4422":"Injecteur 6",
+      "4423":"Injecteur 7",
+      "4424":"Injecteur 8",
+      "4431":"Vitesse ralenti",
+      "4432":"Régime ralenti",
+      "4433":"Relais pompe carburant",
+      "4442":"Soupape régulation ISV",
+      "4443":"Relais extraction",
+      "4444":"Aucune erreur",
+      "0000":"Fin diagnostic"
     };
 
     for (const k in codes) {
@@ -182,68 +175,71 @@ full_html = """
       codeSelect.appendChild(opt);
     }
 
-    switchMode.addEventListener("change", () => {
-      modeSimu = switchMode.checked;
-      ledSimulee.style.display = modeSimu ? "block" : "none";
-      controleSimu.style.display = modeSimu ? "block" : "none";
-      video.style.display = modeSimu ? "none" : "block";
-      if (!modeSimu) startCamera();
-    });
+    modeRadios.forEach(r => r.addEventListener("change", () => {
+      mode = document.querySelector("input[name='mode']:checked").value;
+      ledSimulee.style.display = (mode !== "video") ? "block" : "none";
+      controleSimu.style.display = (mode === "auto") ? "block" : "none";
+      video.style.display = (mode === "video") ? "block" : "none";
+      if (mode === "video") startCamera();
+    }));
 
-    document.addEventListener("keydown", (e) => {
-      if (modeSimu && e.code === "Space") {
+    document.addEventListener("keydown", e => {
+      if (mode === "manuel" && e.code === "Space") {
         ledSimulee.style.background = "red";
         enregistrerClignotement();
       }
     });
-
-    document.addEventListener("keyup", (e) => {
-      if (modeSimu && e.code === "Space") {
-        ledSimulee.style.background = "darkred";
+    document.addEventListener("keyup", e => {
+      if (mode === "manuel" && e.code === "Space") ledSimulee.style.background = "darkred";
+    });
+    ledSimulee.addEventListener("mousedown", () => {
+      if (mode === "manuel") {
+        ledSimulee.style.background = "red";
+        enregistrerClignotement();
       }
     });
-
-    ledSimulee.addEventListener("mousedown", () => {
-      ledSimulee.style.background = "red";
-      enregistrerClignotement();
-    });
     ledSimulee.addEventListener("mouseup", () => {
-      ledSimulee.style.background = "darkred";
+      if (mode === "manuel") ledSimulee.style.background = "darkred";
     });
 
     resetBtn.addEventListener("click", () => {
       resultat.innerText = "Analyse en attente...";
+      clignotements = [];
+      sequence = [];
     });
 
     playCode.addEventListener("click", () => {
       const val = codeSelect.value;
       if (!val) return;
-      const clignotements = val.split("").map(d => parseInt(d));
-      rejouerClignotements(clignotements);
+      const clignots = val.split("").map(d => parseInt(d));
+      rejouerClignotements(clignots);
     });
 
     async function startCamera() {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-      video.srcObject = stream;
-      analyserCamera();
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        video.srcObject = stream;
+        analyserCamera();
+      } catch (e) {
+        alert("Erreur accès caméra");
+      }
     }
 
     function analyserCamera() {
-      if (!modeSimu) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-        let redSum = 0;
-        for (let i = 0; i < data.length; i += 4) redSum += data[i];
-        const avgRed = redSum / (data.length / 4);
-        const ledOn = avgRed > ledThreshold;
-        const now = Date.now();
-        if (ledOn !== lastOn && (!timerStart || now - timerStart > minFlashDelay)) {
-          timerStart = now;
-          if (!ledOn) enregistrerClignotement();
-          lastOn = ledOn;
-        }
-        requestAnimationFrame(analyserCamera);
+      if (mode !== "video") return;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      let redSum = 0;
+      for (let i = 0; i < data.length; i += 4) redSum += data[i];
+      const avgRed = redSum / (data.length / 4);
+      const ledOn = avgRed > ledThreshold;
+      const now = Date.now();
+      if (ledOn !== lastOn && (!timerStart || now - timerStart > minFlashDelay)) {
+        timerStart = now;
+        if (!ledOn) enregistrerClignotement();
+        lastOn = ledOn;
       }
+      requestAnimationFrame(analyserCamera);
     }
 
     function enregistrerClignotement() {
@@ -257,9 +253,9 @@ full_html = """
       const intervals = clignotements.slice(-5).map((t, i, arr) => i > 0 ? t - arr[i - 1] : 0).slice(1);
       const pauseLongue = intervals.find(d => d > 1500);
       if (pauseLongue) {
-        const sequenceCode = clignotements.slice(0, -1).length;
+        const count = clignotements.slice(0, -1).length;
         clignotements = [];
-        sequence.push(sequenceCode);
+        sequence.push(count);
         if (sequence.length === 4) {
           const code = sequence.join('');
           const desc = codes[code] || "Code inconnu";
@@ -269,17 +265,22 @@ full_html = """
       }
     }
 
-    async function rejouerClignotements(sequenceArray) {
-      for (const n of sequenceArray) {
+    async function flashCouleur(couleur, duration) {
+      ledSimulee.style.background = couleur;
+      await new Promise(r => setTimeout(r, duration));
+      ledSimulee.style.background = "darkred";
+    }
+
+    async function rejouerClignotements(seq) {
+      await flashCouleur("yellow", 2000);
+      for (const n of seq) {
         for (let i = 0; i < n; i++) {
-          ledSimulee.style.background = "red";
-          enregistrerClignotement();
-          await new Promise(r => setTimeout(r, 200));
-          ledSimulee.style.background = "darkred";
+          await flashCouleur("red", 200);
           await new Promise(r => setTimeout(r, 200));
         }
         await new Promise(r => setTimeout(r, 1800));
       }
+      await flashCouleur("yellow", 2000);
     }
 
     startCamera();
@@ -288,6 +289,7 @@ full_html = """
 </html>
 """
 
-file_path = Path("/mnt/data/simulateur_diagnostic_led_complet.html")
-file_path.write_text(full_html, encoding="utf-8")
-file_path.name
+# Écriture finale
+final_path = Path("/mnt/data/simulateur_diagnostic_led_complet_v2.html")
+final_path.write_text(html_final_code, encoding="utf-8")
+final_path.name
